@@ -1326,3 +1326,95 @@ HAVING COUNT(1) >= 3
 
 ***发现一个宝藏：https://zhuanlan.zhihu.com/p/569793964***
 
+### [184. Department Highest Salary](https://leetcode.com/problems/department-highest-salary/)
+
+关键点：注意命名，rank是关键字，会导致错误，日常命名要避免这些。
+
+```sql
+SELECT Department, Employee, Salary
+FROM (
+    SELECT 
+  		d.name AS Department, 
+  		e.name AS Employee, e.salary AS Salary, 
+  		DENSE_RANK() OVER(PARTITION BY d.id ORDER BY e.salary DESC) AS rk
+    FROM Employee e
+    JOIN Department d
+    ON e.departmentId = d.id
+) sub_rank
+WHERE rk = 1;
+```
+
+### [550. Game Play Analysis IV](https://leetcode.com/problems/game-play-analysis-iv/)
+
+关键点：没有理解题目的意思！
+
+```sql
+-- 一开始的错误解法
+SELECT ROUND(COUNT(DISTINCT a1.player_id) / (SELECT COUNT(DISTINCT player_id) FROM Activity), 2) AS fraction
+FROM Activity a1, Activity a2
+WHERE a1.player_id = a2.player_id AND DATEDIFF(a2.event_date, a1.event_date) = 1;
+```
+
+题目的意思是，Write a solution to report the **fraction** of players that logged in again on the day after the day they **first logged in**. You need to count the number of players that logged in for at least two consecutive days starting from their **first login date**, then divide that number by the total number of players.
+
+显然我们的做法只考虑了连续两天出现，而没有考虑只是在初次log in的第二天再次登录。也就是说，我们需要首先找到每个用户的首次登录时间。
+
+```sql
+SELECT ROUND(COUNT(DISTINCT a.player_id) / (SELECT COUNT(DISTINCT player_id) FROM Activity), 2) AS fraction
+FROM Activity a
+JOIN (SELECT player_id, MIN(event_date) AS first_login_date FROM Activity GROUP BY player_id) AS first_login
+WHERE a.player_id = first_login.player_id AND DATEDIFF(a.event_date, first_login.first_login_date) = 1;
+```
+
+### [570. Managers with at Least 5 Direct Reports](https://leetcode.com/problems/managers-with-at-least-5-direct-reports/)
+
+```sql
+SELECT e1.name
+FROM Employee e1, Employee e2
+WHERE e1.id = e2.managerId
+GROUP BY e1.id
+HAVING COUNT(*) >= 5;
+```
+
+### [585. Investments in 2016](https://leetcode.com/problems/investments-in-2016/)
+
+关键点：子查询，IN，聚合函数不一定非要group by之后才能使用
+
+```sql
+SELECT ROUND(SUM(tiv_2016), 2) AS tiv_2016
+FROM Insurance
+WHERE tiv_2015 IN
+(SELECT tiv_2015
+FROM Insurance
+GROUP BY tiv_2015
+HAVING COUNT(*) > 1)
+-- 注意这里的写法
+AND (lat, lon) IN 
+(SELECT lat, lon
+FROM Insurance
+GROUP BY lat, lon
+HAVING COUNT(*) = 1)
+```
+
+### [602. Friend Requests II: Who Has the Most Friends](https://leetcode.com/problems/friend-requests-ii-who-has-the-most-friends/)
+
+关键点：union all
+
+参考链接：https://developer.aliyun.com/article/885871
+
+当你想要合并两个查询的结果集时，`UNION ALL` 是一个很有用的操作符。它将两个查询的结果集堆叠在一起，形成一个包含所有结果的单一结果集。这个操作符和 `UNION` 的区别在于，`UNION` 会自动去重，而 `UNION ALL` 不会。
+
+```sql
+SELECT id, COUNT(*) AS num
+FROM (
+    SELECT requester_id AS id FROM RequestAccepted 
+    UNION ALL
+    SELECT accepter_id AS id FROM RequestAccepted
+) AS t1
+GROUP BY id
+ORDER BY num DESC
+LIMIT 1;
+```
+
+想计算两列分别出现的数值次数，union all是一个很好的选择
+
