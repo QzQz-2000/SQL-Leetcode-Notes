@@ -1384,11 +1384,25 @@ WHERE a1.player_id = a2.player_id AND DATEDIFF(a2.event_date, a1.event_date) = 1
 显然我们的做法只考虑了连续两天出现，而没有考虑只是在初次log in的第二天再次登录。也就是说，我们需要首先找到每个用户的首次登录时间。
 
 ```sql
+-- 第一种做法，不使用窗口函数
 SELECT ROUND(COUNT(DISTINCT a.player_id) / (SELECT COUNT(DISTINCT player_id) FROM Activity), 2) AS fraction
 FROM Activity a
 JOIN (SELECT player_id, MIN(event_date) AS first_login_date FROM Activity GROUP BY player_id) AS first_login
 WHERE a.player_id = first_login.player_id AND DATEDIFF(a.event_date, first_login.first_login_date) = 1;
 ```
+
+```sql
+-- 第二种方法，使用窗口函数
+SELECT ROUND(COUNT(new.player_id) / (SELECT COUNT(DISTINCT player_id) FROM activity), 2) AS fraction 
+FROM (
+    SELECT player_id, event_date, DENSE_RANK() OVER (PARTITION BY player_id ORDER BY event_date ASC) AS first_log
+    FROM activity
+) AS new 
+JOIN activity AS a ON DATE_ADD(new.event_date, INTERVAL 1 DAY) = a.event_date
+WHERE new.first_log = 1 AND new.player_id = a.player_id;
+```
+
+> Note：这里有一个需要注意的点，就是COUNT等聚合函数会导致返回结果只有一行，所以注意聚合函数的位置会不会影响其他列返回的结果。
 
 ### [570. Managers with at Least 5 Direct Reports](https://leetcode.com/problems/managers-with-at-least-5-direct-reports/)
 
