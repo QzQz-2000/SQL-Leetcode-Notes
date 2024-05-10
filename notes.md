@@ -1344,6 +1344,30 @@ FROM (
 WHERE rk = 1;
 ```
 
+```sql
+select new.department,new.employee,new.salary
+from(select d.name as department, e.name as employee, e.salary as salary, Max(e.salary) over (partition by d.id) as max_salary
+from employee e join department d on e.departmentId = d.id
+)as new
+where new.salary = new.max_salary
+```
+
+所有的聚合函数都可以在窗口函数中使用，此处我们使用的是在每个窗口内寻找MAX。
+
+```sql
+sum() over (
+    [partition by partition_expression]
+    [order by order_expression]
+    [frame]
+)
+```
+
+| **参数**                            | **说明**                                                     |
+| ----------------------------------- | ------------------------------------------------------------ |
+| partition by *partition_expression* | 窗口分区，根据分区表达式将数据划分成不同的分区。             |
+| order by *order_expression*         | 窗口排序，根据排序表达式对各个分区内的每一行进行排序。       |
+| *frame*                             | 窗口框架，例如`range between unbounded preceding and unbounded following`。 |
+
 ### [550. Game Play Analysis IV](https://leetcode.com/problems/game-play-analysis-iv/)
 
 关键点：没有理解题目的意思！
