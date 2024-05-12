@@ -1456,3 +1456,112 @@ LIMIT 1;
 
 想计算两列分别出现的数值次数，union all是一个很好的选择
 
+### [608. Tree Node](https://leetcode.com/problems/tree-node/)
+
+关键点：写复杂了，其实不用这么复杂，还是要理解题意
+
+```sql
+-- 一开始的写法，其实不用写CTE，我好蠢
+WITH p_help AS (
+    SELECT DISTINCT p_id
+    FROM Tree
+    WHERE p_id IS NOT NULL
+)
+SELECT id, (CASE WHEN p_id IS NULL THEN 'Root' 
+            WHEN id NOT IN (SELECT p_id FROM p_help) THEN 'Leaf'
+            ELSE 'Inner'
+            END) AS type
+FROM Tree;
+```
+
+```sql
+SELECT id, 
+    CASE
+        WHEN p_id IS NULL THEN 'Root'
+        WHEN id IN (
+            SELECT p_id FROM Tree
+        ) THEN 'Inner'
+        ELSE 'Leaf' END AS type
+FROM Tree
+```
+
+但是我在这里遇到一个很有意思的问题
+
+```sql
+SELECT * FROM Tree WHERE id IN (SELECT p_id FROM Tree)
+```
+
+使用IN可以正常返回结果，但是使用下边的NOT IN不能正常返回结果。这是为什么呢？
+
+参考：https://stackoverflow.com/questions/129077/null-values-inside-not-in-clause
+
+```sql
+A: select 'true' where 3 in (1, 2, 3, null)
+B: select 'true' where 3 not in (1, 2, null)
+```
+
+查询 A 与以下内容相同：
+
+```sql
+select 'true' where 3 = 1 or 3 = 2 or 3 = 3 or 3 = null
+```
+
+既然`3 = 3`是真的，你就会得到一个结果。
+
+查询 B 与以下相同：
+
+```sql
+select 'true' where 3 <> 1 and 3 <> 2 and 3 <> null
+```
+
+`NOT IN` 的实现原理是 对每一个a表的指定字段和每一个b表的指定字段进行不相等比较(!=). 而SQL中 `任意!=null`的运算结果都是false. 所以B表中存在一个 `null `,`NOT IN`的查询永远都会返回false,即查询结果为空. 当你在一个可以为NULL的列上使用 `IN`或者 `NOT IN` 子查询时，可以好好想想使用 `EXISTS`或 `NOT EXISTS`代替 .因为 `nulls`是 `NOT IN`慢的如蜗牛的罪魁祸首!
+
+参考链接：https://www.jianshu.com/p/ebfec61bcf6a
+
+将值与 null 进行比较不会返回`false`；它返回`unknown`。并且`unknown`有自己的逻辑：
+
+```sql
+unknown  AND  false  = false 
+unknown  AND  true   = unknown
+unknown  OR   true   = true
+unknown  OR   false  = unknown
+```
+
+这是如何实现的一个例子：
+
+```sql
+where 1 not in (2, null)
+--> where 1 <> 2 and 1 <> null
+--> where true and unknown
+--> where unknown
+```
+
+#### MySQL中NOT IN和NOT EXISTS存在区别
+
+如果想对两个表进行差集操作，可以配合子查询，使用`NOT IN`或者`NOT EXISTS`。`NOT IN`更加显得清晰、简单。如今的数据库系统都会将这两种查询方式优化成相同的执行计划获得类似的结果，处理外部和内部查询相关性。
+
+有个很重要的区别是，如果在子查询的结果里返回了NULL，`NOT IN` 子句会执行失败，因为NULL和任何值都不相等。除了这个，`NOT IN` 和`NOT EXISTS` 应该就没什么区别了
+
+接下来就要来说说`NOT IN` 慢得如蜗牛的一个例子了，nulls是罪魁祸首。
+
+> Note: 可以在查询前边加`EXPLAIN`关键字来查看查询的查询计划。
+>
+> 例如：`EXPLAIN SELECT * FROM Tree WHERE id NOT IN (SELECT p_id FROM Tree);`
+
+原博客有更详细的解释，包括二者具体查询计划的区别。
+
+参考链接：https://explainextended.com/2009/09/18/not-in-vs-not-exists-vs-left-join-is-null-mysql/
+
+这个文章有全面的比较，值得认真阅读
+
+维基百科三值逻辑：https://en.wikipedia.org/wiki/Null_%28SQL%29
+
+<img src="./images/26.png" alt="26" style="zoom:50%;" />
+
+MySQL官方文档：https://dev.mysql.com/doc/refman/8.0/en/working-with-null.html
+
+不能使用算术比较运算符，如=、&lt;或&lt;&gt;来测试是否为NULL。为了演示这一点，请尝试以下查询：
+
+<img src="./images/27.png" alt="27" style="zoom:50%;" />
+
+因为与NULL的任何算术比较的结果也是NULL，所以您无法从这种比较中获得任何有意义的结果。两个NULL值在GROUP BY中被认为是相等的。When doing an `ORDER BY`, `NULL` values are presented first if you do `ORDER BY ... ASC` and last if you do `ORDER BY ... DESC`.
