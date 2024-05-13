@@ -1565,3 +1565,82 @@ MySQL官方文档：https://dev.mysql.com/doc/refman/8.0/en/working-with-null.ht
 <img src="./images/27.png" alt="27" style="zoom:50%;" />
 
 因为与NULL的任何算术比较的结果也是NULL，所以您无法从这种比较中获得任何有意义的结果。两个NULL值在GROUP BY中被认为是相等的。When doing an `ORDER BY`, `NULL` values are presented first if you do `ORDER BY ... ASC` and last if you do `ORDER BY ... DESC`.
+
+### [626. Exchange Seats](https://leetcode.com/problems/exchange-seats/)
+
+关键点：思路，分类讨论
+
+```sql
+SELECT 
+    CASE WHEN id%2=0 THEN id-1 WHEN id%2=1 AND id!=(SELECT MAX(id) FROM Seat) THEN id+1 ELSE id END AS id,
+    student
+FROM Seat
+ORDER BY id ASC;
+```
+
+### [1045. Customers Who Bought All Products](https://leetcode.com/problems/customers-who-bought-all-products/)
+
+```sql
+SELECT customer_id
+FROM Customer
+GROUP BY customer_id
+HAVING COUNT(DISTINCT product_key) = (SELECT COUNT(*) FROM Product)
+```
+
+### [1070. Product Sales Analysis III](https://leetcode.com/problems/product-sales-analysis-iii/)
+
+关键点：不能对group by使用limit，但是我们可以使用窗口函数实现类似的功能
+
+```sql
+SELECT product_id, year AS first_year, quantity, price
+FROM (SELECT *, DENSE_RANK() OVER(PARTITION BY product_id ORDER BY year ASC) AS rk FROM Sales) sub
+WHERE rk = 1
+```
+
+第二种解法可以使用IN，重点是选择IN的项
+
+```sql
+select product_id, year as first_year, quantity, price
+from Sales
+where (product_id, year) in (select product_id, min(year) from Sales group by product_id)
+```
+
+### [1158. Market Analysis I](https://leetcode.com/problems/market-analysis-i/)
+
+关键点：COUNT对于null的处理
+
+1.count(1)与count(*)得到的结果一致，包含null值。
+2.count(字段)不计算null值
+3.count(null)结果恒为0
+
+```sql
+SELECT Users.user_id AS buyer_id, Users.join_date, COUNT(order_id) AS orders_in_2019
+FROM
+(SELECT * FROM Orders WHERE YEAR(order_date) = '2019'
+) sub
+RIGHT JOIN Users
+ON Users.user_id = sub.buyer_id
+GROUP BY Users.user_id
+```
+
+这里的count可以不用ifnull，因为count对null的处理是0.
+
+### [1164. Product Price at a Given Date](https://leetcode.com/problems/product-price-at-a-given-date/)
+
+关键点：使用CTE和UNION
+
+```sql
+WITH price_help AS (
+    SELECT *, DENSE_RANK() OVER(PARTITION BY product_id ORDER BY change_date DESC) AS rk
+    FROM Products
+    WHERE change_date <= '2019-08-16'
+)
+SELECT product_id, new_price AS price
+FROM price_help
+WHERE rk = 1
+UNION
+SELECT product_id, 10 AS price
+FROM Products
+WHERE product_id NOT IN (SELECT product_id FROM price_help)
+```
+
