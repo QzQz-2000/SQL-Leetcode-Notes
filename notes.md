@@ -1644,3 +1644,54 @@ FROM Products
 WHERE product_id NOT IN (SELECT product_id FROM price_help)
 ```
 
+### [1174. Immediate Food Delivery II](https://leetcode.com/problems/immediate-food-delivery-ii/)
+
+```sql
+SELECT ROUND(AVG(order_date = customer_pref_delivery_date)*100, 2) AS immediate_percentage
+FROM (
+    SELECT *, DENSE_RANK() OVER(PARTITION BY customer_id ORDER BY order_date ASC) AS rk_date
+    FROM Delivery
+    ) sub
+WHERE rk_date = 1
+```
+
+`AVG(order_date = customer_pref_delivery_date)`：这一部分计算满足条件的记录的比例。由于条件返回的是布尔值（1 或 0），因此它实际上计算了满足条件的记录的比例。如果记录的订单日期等于客户首选的交付日期，则条件为真，否则为假。
+
+### [1193. Monthly Transactions I](https://leetcode.com/problems/monthly-transactions-i/)
+
+关键点：DATE_FORMAT函数，区分SUM和COUNT的使用
+
+```sql
+SELECT DATE_FORMAT(trans_date, '%Y-%m') AS month, 
+       country,
+       COUNT(*) AS trans_count,
+       SUM(IF(state='approved', 1, 0)) AS approved_count,
+       SUM(amount) AS trans_total_amount,
+       SUM(IF(state='approved', amount, 0)) AS approved_total_amount
+FROM Transactions
+GROUP BY country, YEAR(trans_date), MONTH(trans_date)
+```
+
+在 MySQL 中，使用 `DATE_FORMAT` 函数可以将日期格式化为指定的字符串格式。具体用法是：
+
+```sql
+DATE_FORMAT(date_column, format)
+```
+
+这里需要注意COUNT和SUM的区别，COUNT(0) = 1，COUNT(NULL) = 0。`type = '1'` 实际上是一个条件表达式，它会返回布尔值（1 或 0），所以应该使用SUM，因为使用COUNT它对0和1都会计数为1.
+
+聚合函数中都可以加过滤条件来进行计算，例如第一个SUM其实可以简写为：`SUM(state='approved') AS approved_count`.但是第二个SUM不可以这样操作，大家可以想想为什么。
+
+### [1204. Last Person to Fit in the Bus](https://leetcode.com/problems/last-person-to-fit-in-the-bus/)
+
+关键点：思路，聚合函数的窗口函数，使用SUM窗口函数求累计和
+
+```sql
+SELECT person_name
+FROM (SELECT *, SUM(weight) OVER(ORDER BY turn ASC) AS total_weight
+    FROM Queue) total_weight
+WHERE total_weight <= 1000
+ORDER BY turn DESC
+LIMIT 1;
+```
+
