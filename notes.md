@@ -1695,3 +1695,103 @@ ORDER BY turn DESC
 LIMIT 1;
 ```
 
+### [1321. Restaurant Growth](https://leetcode.com/problems/restaurant-growth/)
+
+关键点：窗口函数，滑动窗口
+
+参考链接：https://leetcode.cn/problems/restaurant-growth/solutions/1047332/jiang-jie-bing-gai-jin-ping-lun-qu-da-la-34xv
+
+首先理解题意，计算七天窗口内消费者付的平均金额。
+
+<img src="./images/28.png" alt="28" style="zoom:50%;" />
+
+了解一下窗口函数，之前我们一直没有用到窗口滑动的数据范围。
+
+```sql
+[你要的操作] OVER ( PARTITION BY  <用于分组的列名>
+                    ORDER BY <按序叠加的列名> 
+                    ROWS <窗口滑动的数据范围> )
+```
+
+**<窗口滑动的数据范围> 用来限定[ 你要的操作] 所运用的数据的范围，具体有如下这些：**
+
+```sql
+当前行 - current row
+之前的行 - preceding
+之后的行 - following
+无界限 - unbounded
+表示从前面的起点 - unbounded preceding
+表示到后面的终点 - unbounded following
+```
+
+举个例子：
+
+```sql
+取当前行和前五行：ROWS between 5 preceding and current row --共6行
+取当前行和后五行：ROWS between current row and 5 following --共6行
+取前五行和后五行：ROWS between 5 preceding and 5 folowing --共11行
+```
+
+本题中，要按照日期累计金额，从当天算起一共7天。
+
+可以理解成操作是累计金额，按序叠加的列是日期，窗口内的函数要取当前行和前6行。
+
+需要注意的是：
+
+- 即使前边的数据不够，窗口函数也会将范围内的数据框住并计算，因此需要最后手动地只要能够完整框住7天的情况。
+- 另外比较阴损的是，本题的数据中存在着某一日有多个消费的情况，这样一来即使窗口照旧向前取6天就无法覆盖被挤出去的数据了，因此，需要构建一个小表格用来存放每天的金额总量 【绊子2】
+
+```sql
+SELECT DISTINCT visited_on,
+       sum_amount AS amount, 
+       ROUND(sum_amount/7, 2) AS average_amount
+-- 以上是破解【绊子1】并计算平均值，少用一次窗口函数提高运行速度
+FROM (
+    SELECT visited_on, 
+       SUM(amount) OVER ( ORDER BY visited_on ROWS 6 PRECEDING ) AS sum_amount
+    -- 以下是计算每天的金额总量，破解【绊子2】
+    FROM (
+        SELECT visited_on, 
+            SUM(amount) AS amount
+        FROM Customer
+        GROUP BY visited_on
+         ) TT
+     ) LL
+-- 最后手动只要覆盖完整7天的数据，破解【绊子1】
+WHERE DATEDIFF(visited_on, (SELECT MIN(visited_on) FROM Customer)) >= 6
+```
+
+- 首先计算每天的金额总量，存储在一个子查询表格中
+- 利用滑动窗口，计算每七天的金额总量
+- 最后利用where过滤能够覆盖完整7天的数据
+
+这里我们少使用了窗口函数来提高运行速度，可以直接除以7。
+
+### [1341. Movie Rating](https://leetcode.com/problems/movie-rating/)
+
+关键点：UNION会去重！！！如果人名和电影名字重复则会导致错误，所以要使用UNION ALL
+
+```sql
+(SELECT u.name AS results
+FROM Users u
+JOIN MovieRating m1
+ON u.user_id = m1.user_id
+GROUP BY m1.user_id
+ORDER BY COUNT(rating) DESC, u.name ASC
+LIMIT 1)
+
+UNION ALL
+
+(SELECT m2.title AS results
+FROM Movies m2
+JOIN MovieRating m3
+ON m2.movie_id = m3.movie_id
+WHERE YEAR(created_at) = '2020' AND MONTH(created_at) = '02'
+GROUP BY m3.movie_id
+ORDER BY AVG(rating) DESC, m2.title ASC
+LIMIT 1)
+```
+
+或者使用left(created_at, 7)也行。
+
+> Note: LEFT(string, number_of_characters)，包括空格
