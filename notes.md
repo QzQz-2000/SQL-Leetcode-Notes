@@ -1587,6 +1587,12 @@ GROUP BY customer_id
 HAVING COUNT(DISTINCT product_key) = (SELECT COUNT(*) FROM Product)
 ```
 
+#### Foreign key
+
+foreign key请看这个博客，讲解很详细：
+
+https://blog.csdn.net/qq_42534026/article/details/106158803
+
 ### [1070. Product Sales Analysis III](https://leetcode.com/problems/product-sales-analysis-iii/)
 
 关键点：不能对group by使用limit，但是我们可以使用窗口函数实现类似的功能
@@ -1795,3 +1801,115 @@ LIMIT 1)
 或者使用left(created_at, 7)也行。
 
 > Note: LEFT(string, number_of_characters)，包括空格
+
+### [1393. Capital Gain/Loss](https://leetcode.com/problems/capital-gainloss/)
+
+```sql
+SELECT stock_name, SUM(CASE WHEN operation = 'Sell' THEN price ELSE price*(-1) END) AS capital_gain_loss
+FROM Stocks
+GROUP BY stock_name
+```
+
+### [1907. Count Salary Categories](https://leetcode.com/problems/count-salary-categories/)
+
+关键点：当有一种情况缺失，不好表达且没有另外的表可以JOIN时，考虑使用UNION。
+
+```sql
+SELECT 'Low Salary' AS category, SUM(income<20000) AS accounts_count
+FROM Accounts
+UNION
+SELECT 'Average Salary' AS category, SUM(income>=20000 AND income<=50000) AS accounts_count
+FROM Accounts
+UNION
+SELECT 'High Salary' AS category, SUM(income>50000) AS accounts_count
+FROM Accounts
+```
+
+### [1934. Confirmation Rate](https://leetcode.com/problems/confirmation-rate/)
+
+```sql
+SELECT s.user_id, ROUND(IFNULL(AVG(action='confirmed'), 0), 2) AS confirmation_rate
+FROM Signups s
+LEFT JOIN Confirmations c
+ON s.user_id = c.user_id
+GROUP BY s.user_id
+```
+
+ ## Hard
+
+### [185. Department Top Three Salaries](https://leetcode.com/problems/department-top-three-salaries/)
+
+关键点：这里不用使用LEFT JOIN，因为当部门不存在要求的高收入结果时，可以不返回结果，还要注意几种rank的区别
+
+<img src="./images/29.png" alt="29" style="zoom:50%;" />
+
+```sql
+SELECT d_name AS Department, e_name AS Employee, salary AS Salary
+FROM (
+    SELECT d.id, d.name AS d_name, e.name AS e_name, e.salary, DENSE_RANK() OVER(PARTITION BY d.id ORDER BY e.salary DESC) AS s_rank
+    FROM Department d
+    JOIN Employee e
+    ON d.id = e.departmentId
+) sub
+WHERE s_rank <= 3
+```
+
+### [262. Trips and Users](https://leetcode.com/problems/trips-and-users/)
+
+关键点：其实JOIN的时候可以利用ON来进行过滤
+
+```sql
+-- 注意这里有空格的列名需要加引号
+SELECT t.request_at AS Day, ROUND(AVG(status!='completed'), 2) AS 'Cancellation Rate'
+FROM Trips t
+JOIN Users u1
+JOIN Users u2
+ON t.client_id = u1.users_id AND t.driver_id = u2.users_id
+WHERE request_at BETWEEN '2013-10-01' AND '2013-10-03' AND u1.banned = 'No' AND u2.banned = 'No'
+GROUP BY t.request_at;
+```
+
+```sql
+SELECT
+    request_at as 'Day', round(avg(Status!='completed'), 2) as 'Cancellation Rate'
+FROM 
+-- 在这里其实就可以直接定义u1.banned了
+    trips t JOIN users u1 ON (t.client_id = u1.users_id AND u1.banned = 'No')
+    JOIN users u2 ON (t.driver_id = u2.users_id AND u2.banned = 'No')
+WHERE	
+    request_at BETWEEN '2013-10-01' AND '2013-10-03'
+GROUP BY 
+    request_at
+```
+
+```sql
+-- 不使用JOIN的方法，妙啊！
+select request_at 'Day',
+round(count(if(status!='completed',status,null))/count(*),2) 'Cancellation Rate'
+from Trips
+where request_at between '2013-10-01' and '2013-10-03'
+and client_id not in (select users_id from Users where banned='Yes') 
+and driver_id not in (select users_id from Users where banned='Yes')
+group by request_at;
+```
+
+### [601. Human Traffic of Stadium](https://leetcode.com/problems/human-traffic-of-stadium/)
+
+```sql
+WITH help1 AS (
+    SELECT id, visit_date, people, (id - ROW_NUMBER() OVER(ORDER BY id)) AS diff
+    FROM Stadium
+    WHERE people >= 100
+),
+help2 AS(
+    SELECT diff
+    FROM help1 
+    GROUP BY diff
+    HAVING COUNT(*) >= 3
+)
+SELECT id, visit_date, people 
+FROM help1
+WHERE diff IN (SELECT diff FROM help2)
+ORDER BY visit_date ASC;
+```
+
