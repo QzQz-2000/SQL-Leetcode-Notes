@@ -85,7 +85,7 @@ WHERE Person.email > (
 );
 ```
 
-#### 如何理解SQL中的自查询？
+#### 如何理解SQL中的自连接？
 
 自连接是两张表结构和数据内容完全相同的表，在做处理时，我们通常会给他们分别重命名来加以区分，然后进行关联。自连接实际上涉及的是同一张表的两个不同实例。
 
@@ -1912,4 +1912,143 @@ FROM help1
 WHERE diff IN (SELECT diff FROM help2)
 ORDER BY visit_date ASC;
 ```
+
+### [534. 游戏玩法分析 III](https://leetcode.cn/problems/game-play-analysis-iii/)
+
+```sql
+SELECT 
+    player_id, 
+    event_date, 
+    SUM(games_played) OVER(PARTITION BY player_id ORDER BY event_date) AS games_played_so_far
+FROM Activity
+```
+
+### [574. 当选者](https://leetcode.cn/problems/winning-candidate/)
+
+关键点：**使用JOIN而不是子查询**，子查询可能会对性能有影响，特别是在数据量较大的情况下。使用JOIN可以更直观地理解查询意图。
+
+一开始我的答案是这样的：
+
+```sql
+SELECT name
+FROM Candidate
+WHERE id IN (
+    SELECT candidateId
+    FROM Vote
+    GROUP BY candidateId
+    ORDER BY COUNT(*) DESC
+    LIMIT 1
+)
+```
+
+但是报错了，为什么呢，明明看起来没有问题？
+
+```
+This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'
+```
+
+这个错误通常是由于MySQL版本太旧导致的。在旧版本的MySQL中，无法在子查询中使用LIMIT和IN / ALL / ANY / SOME子查询。您需要升级到MySQL的较新版本，以解决这个问题。或者，您可以尝试使用其他方法来编写查询，而不是使用子查询和LIMIT。（无语死了）
+
+回归最传统的写法：
+
+```sql
+SELECT name
+FROM Candidate c
+JOIN Vote v
+ON c.id = v.candidateId
+GROUP BY candidateId
+ORDER BY COUNT(*) DESC
+LIMIT 1;
+```
+
+或者把子查询的方法改写成JOIN：
+
+```sql
+SELECT name
+FROM Candidate a
+JOIN (
+    SELECT candidateid, COUNT(id) AS vote_count
+    FROM Vote
+    GROUP BY candidateid
+    ORDER BY vote_count DESC
+    LIMIT 1
+) b
+ON a.id = b.candidateid;
+```
+
+### [578. 查询回答率最高的问题](https://leetcode.cn/problems/get-highest-answer-rate-question/)
+
+```sql
+SELECT question_id AS survey_log
+FROM (
+    SELECT question_id, SUM(action='answer')/SUM(action='show') AS as_rate
+    FROM SurveyLog
+    GROUP BY question_id
+    ORDER BY as_rate DESC, question_id ASC
+    LIMIT 1
+) sub
+```
+
+上边是我最初的解法，但是我学到ORDER BY中其实可以直接使用SUM来排序！
+
+```sql
+SELECT question_id AS survey_log
+FROM survey_log
+GROUP BY question_id
+ORDER BY SUM(if(action = "answer", 1, 0)) / SUM(if(action = "show", 1, 0)) DESC
+LIMIT 1
+```
+
+### [580. 统计各专业学生人数](https://leetcode.cn/problems/count-student-number-in-departments/)
+
+```sql
+SELECT dept_name, COUNT(Student_id) AS student_number
+FROM Department d
+LEFT JOIN Student s
+ON d.dept_id = s.dept_id
+GROUP BY d.dept_id
+ORDER BY student_number DESC, dept_name ASC;
+```
+
+```sql
+SELECT dept_name, IFNULL(student_number, 0) AS student_number
+FROM Department d
+LEFT JOIN (
+    SELECT *, COUNT(*) AS student_number
+    FROM Student
+    GROUP BY dept_id
+) sub
+ON d.dept_id = sub.dept_id
+ORDER BY student_number DESC, dept_name ASC;
+```
+
+### [612. 平面上的最近距离](https://leetcode.cn/problems/shortest-distance-in-a-plane/)
+
+关键点：记得剔除自己和自己连接的行
+
+```sql
+SELECT ROUND(SQRT((p1.x-p2.x)*(p1.x-p2.x) + (p1.y-p2.y)*(p1.y-p2.y)), 2) AS shortest
+FROM Point2D p1, Point2D p2
+WHERE p1.x != p2.x OR p1.y != p2.y
+ORDER BY shortest ASC
+LIMIT 1;
+```
+
+为了提高效率，可以通过限定连接条件减少一半计算
+
+```sql
+-- 可以用MIN，我怎么没想到
+SELECT ROUND(MIN(SQRT(POWER(p1.x - p2.x, 2) + POWER(p1.y - p2.y, 2))), 2) AS shortest
+FROM point2D p1
+JOIN point2D p2 
+-- 筛选掉重复的行
+ON p1.x < p2.x OR p1.y < p2.y;
+```
+
+```sql
+POWER(base, exponent)
+```
+
+- `base`：要计算其指定次幂的基数。
+- `exponent`：指定的幂。
 
