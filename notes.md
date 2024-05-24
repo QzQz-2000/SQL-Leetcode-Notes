@@ -2052,3 +2052,109 @@ POWER(base, exponent)
 - `base`：要计算其指定次幂的基数。
 - `exponent`：指定的幂。
 
+### [614. 二级关注者](https://leetcode.cn/problems/second-degree-follower/)
+
+```sql
+SELECT followee AS follower, COUNT(*) AS num
+FROM Follow
+GROUP BY followee
+HAVING followee IN (SELECT follower FROM Follow)
+ORDER BY follower;
+```
+
+### [1077. 项目员工 III](https://leetcode.cn/problems/project-employees-iii/)
+
+```sql
+SELECT project_id, employee_id
+FROM (SELECT p.project_id, p.employee_id, RANK() OVER(PARTITION BY p.project_id ORDER BY e.experience_years DESC) AS rk
+    FROM Project p
+    JOIN Employee e
+    ON p.employee_id = e.employee_id) sub
+WHERE rk = 1;
+```
+
+### [1098. 小众书籍](https://leetcode.cn/problems/unpopular-books/)
+
+关键点：ON和WHERE的区别
+
+```sql
+SELECT sub1.book_id, sub1.name
+FROM (
+    SELECT *
+    FROM Books
+    WHERE DATEDIFF('2019-06-23', available_from) >= 30
+) sub1
+LEFT JOIN (
+    SELECT *, SUM(quantity) AS orders_num
+    FROM Orders
+    WHERE dispatch_date >= '2018-06-23'
+    GROUP BY book_id
+) sub2
+ON sub1.book_id = sub2.book_id
+WHERE orders_num < 10 OR orders_num IS NULL;
+```
+
+```sql
+-- 网友的解法，把条件限制放在ON后边
+select b.book_id, name
+from books b left join orders o
+on b.book_id = o.book_id and dispatch_date >= '2018-06-23'
+where available_from < '2019-05-23'
+group by b.book_id
+having ifnull(sum(quantity), 0) < 10
+```
+
+考察的知识点主要是left join的使用以及on和where的辨析
+注意两个条件的区别：
+
+- 过去一年内订单总量少于10本：因为有的书根本没有订单，所以该条件应该让left join对应的on去筛选，没有订单的至少返回null，后续可以通过ifnull()把null转换成0
+- 不考虑上架不满一个月的书：应该直接通过where筛除，不符合条件的连null都不应该有，否则会混入结果中导致错误
+- 本题的时间边界条件比较模糊，“一个月”、“一年”都没有比较清楚的描述，用例也没那么强，大致对即可通过
+- 链接：https://leetcode.cn/problems/unpopular-books/solutions/182606/mysql-1098-xiao-zhong-shu-ji-on-he-where-de-bian-x/。
+
+### [1107. 每日新用户统计](https://leetcode.cn/problems/new-users-daily-count/)
+
+关键点：DISTINCT，因为用户可能一天多次登陆！
+
+```sql
+SELECT activity_date AS login_date, COUNT(DISTINCT user_id) AS user_count
+FROM (
+    SELECT *, RANK() OVER(PARTITION BY user_id ORDER BY activity_date) AS rk
+    FROM Traffic
+    WHERE activity = 'login'
+) sub
+WHERE DATEDIFF('2019-06-30', activity_date) <= 90 AND rk = 1
+GROUP BY activity_date;
+```
+
+```sql
+-- 网友的写法，首先选出每个user登陆的最早日期，这种方法不需要distinct
+SELECT 
+    login_date,
+    count(user_id) user_count 
+FROM (  
+    SELECT 
+        min(activity_date) AS login_date, 
+        user_id
+    FROM Traffic
+    WHERE activity= 'login'
+    GROUP BY user_id
+) t
+WHERE DATEDIFF('2019-6-30', login_date) <= 90
+GROUP BY login_date;
+```
+
+很巧妙啊，首先利用group by分组，然后选出每个组中最小的日期，这种写法我很少写。还有就是注意“90天内”这个条件，是小于等于！
+
+### [1112. 每位学生的最高成绩](https://leetcode.cn/problems/highest-grade-for-each-student/)
+
+```sql
+SELECT student_id, course_id, grade
+FROM (
+    SELECT *, RANK() OVER(PARTITION BY student_id ORDER BY grade DESC, course_id ASC) AS rk
+    FROM Enrollments
+) sub
+WHERE rk = 1
+ORDER BY student_id ASC;
+```
+
